@@ -1,0 +1,5 @@
+paths:
+  raw_path: "data/raw/AB_NYC_2019.csv"
+  processed_path: "data/processed/processed.csv"
+  model_path: "models/model.joblib"
+  visualizer_path: "reports/figures"
