@@ -48,7 +48,7 @@ class DataLoader:
         except FileNotFoundError as e:
             self.logger.error(f"Raw data file not found at: {e}")
             raise
-        except Exception as e:
+        except Exception:
             self.logger.error(f"Failed to read data from {self.config.paths.raw_path}")
             raise
 
