@@ -2,6 +2,7 @@ import pandas as pd
 import loguru
 from src.schemas import AppConfig
 
+
 class DataLoader:
     """
     The class responsible for uploading CSV data files.
@@ -11,17 +12,24 @@ class DataLoader:
         config (AppConfig): Validated application configuration object.
     """
     
-    def __init__(self, config: dict, logger: loguru.Logger):
+    def __init__(self, config: dict, logger):
         """
         Initializes the DataLoader object and validates its configuration.
 
         Args:
             config: Dictionary containing application configuration
-            logger: Logger object used to write log messages
+            logger: Logger instance used for logging messages.
+                Expected to implement: info(), error(), warning().
 
         Raises:
+            TypeError: If logger does not implement required logging methods
             ValidationError: Thrown if the configuration does not match the schema.
         """
+
+        required_logger_methods = ("info", "error", "warning")
+
+        if logger is None or not all(callable(getattr(logger, m, None)) for m in required_logger_methods):
+            raise TypeError(f"Invalid logger: missing required methods {required_logger_methods}")
         
         self.logger = logger
 
@@ -43,6 +51,8 @@ class DataLoader:
             Exception: Thrown if an unexpected error occurs while reading the file.
         """
 
+        self.logger.info(f"Loading raw data from: {self.config.paths.raw_path}")
+
         try:
             df = pd.read_csv(self.config.paths.raw_path)
         except FileNotFoundError as e:
@@ -54,4 +64,7 @@ class DataLoader:
 
         if df.empty:
             self.logger.warning("Loaded CSV is empty.")
+
+        self.logger.info("Data uploaded successfully.")
+
         return df
