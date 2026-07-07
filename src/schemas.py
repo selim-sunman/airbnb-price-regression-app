@@ -7,6 +7,9 @@ class DataConfig(BaseModel):
     model_path: str
     visualizer_path: str
 
+class PreprocessingConfig(BaseModel):
+    drop_cols: list
 
 class AppConfig(BaseModel):
     paths: DataConfig
+    preprocessing: PreprocessingConfig

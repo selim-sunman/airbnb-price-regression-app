@@ -4,6 +4,7 @@ import copy
 import pandas as pd
 from pathlib import Path
 from loguru import logger
+from unittest.mock import MagicMock
 
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -139,5 +140,6 @@ def sample_df():
         "availability_365": [189, 73, 0, 272, 30, 28, 0, 121, 55, 70]
     })
 
-
-
+@pytest.fixture
+def mock_logger():
+    return MagicMock()

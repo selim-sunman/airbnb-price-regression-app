@@ -1,5 +1,4 @@
 import pandas as pd
-import loguru
 from src.schemas import AppConfig
 
 

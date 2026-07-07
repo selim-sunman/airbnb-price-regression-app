@@ -3,3 +3,14 @@ paths:
   processed_path: "data/processed/processed.csv"
   model_path: "models/model.joblib"
   visualizer_path: "reports/figures"
+
+preprocessing:
+  drop_cols:
+    - "id"
+    - "name"
+    - "host_id"
+    - "host_name"
+    - "last_review"
+    - "number_of_reviews"
+    - "reviews_per_month"
+    - "availability_365"

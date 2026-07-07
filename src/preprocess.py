@@ -4,29 +4,41 @@ import pandas as pd
 
 class Preprocess:
     """
-    This class provides methods for handling missing values,
-    processing outliers, and transforming skewed numerical features
-    to improve data quality before feature engineering.
+    Provides preprocessing utilities for tabular datasets.
+
+    The class performs three main preprocessing tasks:
+
+    - Handles outliers
+    - Fills missing values
+    - Applies transformations to reduce feature skewness
+
+    These operations prepare the dataset for feature engineering and model training.
 
     Attributes:
-        logger: Logger instance used for error reporting and process tracking.
-        df (pd.DataFrame): Input dataset to be preprocessed.
+        logger: Logger instance used for logging events and errors.
+        df (pd.DataFrame): Dataset to preprocess.
     """
 
-    def __init__(self, logger, df):
+    def __init__(self, logger, df: pd.DataFrame, price_cap_percentile: float = 0.99, max_nights: int = 365):
         """
-        Initializes a Preprocess instance.
+        Initializes the preprocessing pipeline.
 
         Args:
-            logger: Logger instance used for logging information, warnings, and errors.
-                Expected to implement at least: info(), error(), warning() methods.
-            df (pd.DataFrame): Input dataset to be preprocessed.
+            logger: Logger instance implementing the required logging methods.
+            df (pd.DataFrame): Input dataset.
+            price_cap_percentile (float, optional): 
+                Percentile used to cap extreme values in the ``price`` column.
+                Defaults to 0.99.
+            max_nights (int, optional):
+                Maximum allowed value for ``minimum_nights``.
+                Defaults to 365.
 
         Raises:
-            TypeError: If logger does not implement required logging methods or if df is not a pandas DataFrame.
+            TypeError:
+                If ``logger`` does not implement the required logging methods or if ``df`` is not a pandas DataFrame.
         """
 
-        required_logger_methods = ("info", "error", "warning")
+        required_logger_methods = ("info", "error", "warning", "exception")
 
         if logger is None or not all(callable(getattr(logger, m, None)) for m in required_logger_methods):
             raise TypeError(f"Invalid logger: missing required methods {required_logger_methods}")
@@ -36,154 +48,177 @@ class Preprocess:
         
         self.logger = logger
         self.df = df
+        self.price_cap_percentile = price_cap_percentile
+        self.max_nights = max_nights
 
-    def outlier_operations(self):
+    def validate_columns(self, df: pd.DataFrame, required: list[str]) -> None:
         """
-        Processes outliers in the dataset.
+        Validates that all required columns exist in the dataset.
 
-        Operations:
-            - Removes rows with non-positive values in the 'price' column.
-            - Caps 'price' values at the 99th percentile.
-            - Removes rows where 'minimum_nights' exceeds 365.
-
-        Returns:
-            pd.DataFrame: Dataset with outliers processed.
+        Args:
+            df (pd.DataFrame): Input dataset.
+            required (list[str]): List of required column names.
 
         Raises:
-            ValueError: If the 'price' or 'minimum_nights' column is missing.
-            Exception: Propagates any unexpected exception encountered during outlier processing after logging the error.
+            ValueError: If one or more required columns are missing.
+        """
+        if not isinstance(df, pd.DataFrame):
+            raise TypeError("df must be a pandas DataFrame")
+
+        missing = [c for c in required if c not in df.columns]
+
+        if missing:
+            raise ValueError(f"Missing columns: {sorted(missing)}")
+
+    def outlier_operations(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Removes or caps extreme values in the dataset.
+
+        Processing steps:
+            - Removes rows where ``price`` is less than or equal to zero.
+            - Caps ``price`` values at the configured percentile.
+            - Removes rows where ``minimum_nights`` exceeds the configured limit.
+
+        Args:
+            df (pd.DataFrame): Dataset to process.
+
+        Returns:
+            pd.DataFrame: Dataset after outlier handling.
+
+        Raises:
+            ValueError: If required columns are missing.
+            Exception: Re-raises any unexpected exception after logging it.
         """
 
         try:
-            new_df = self.df.copy()
+            df = df.copy()
 
-            if "price" in new_df.columns:
-                new_df = new_df[new_df["price"] > 0]
-                upper = new_df["price"].quantile(0.99)
-                new_df["price"] = new_df["price"].clip(upper=upper)
-            else:
-                raise ValueError("'price' column is missing from the DataFrame.")
-        
-            if "minimum_nights" in new_df.columns:
-                new_df = new_df[new_df["minimum_nights"] <= 365]
-            else:
-                raise ValueError("The 'minimum_nights' property was not found in 'new_df'.")
-        
+            self.logger.info("Starting outlier processing.")
+
+            self.validate_columns(df, ["price", "minimum_nights"])
+
+            df = df.loc[df["price"] > 0].copy()
+            upper = df["price"].quantile(self.price_cap_percentile)
+            df["price"] = df["price"].clip(upper=upper)
+
+            df = df.loc[df["minimum_nights"] <= self.max_nights].copy()
+
+            self.logger.info("Outlier processing completed successfully.")
+
+            return df
+
         except Exception:
             self.logger.exception("Unexpected error during outlier processing.")
             raise
-
-        return new_df
     
-    def missing_value_operations(self, df=None):
+    def missing_value_operations(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Handles missing values in the dataset.
+        Handles missing values in selected columns.
 
-        Operations:
-            - Uses the provided DataFrame if available; otherwise uses self.df.
-            - Converts the 'last_review' column to datetime format and fills
-                missing values with '1970-01-01'.
-            - Fills missing values in 'reviews_per_month' with 0, assuming
-                that missing values indicate listings with no monthly reviews.
+        Processing steps:
+            - Converts ``last_review`` to datetime.
+            - Replaces missing ``last_review`` values with ``1970-01-01``.
+            - Fills missing ``reviews_per_month`` values with ``0``.
 
         Args:
-            df (pd.DataFrame, optional): Input DataFrame. If None, self.df is used.
+            df (pd.DataFrame): Dataset to process.
 
         Returns:
             pd.DataFrame: Dataset with missing values handled.
 
         Raises:
-            TypeError: If df is provided and is not a pandas DataFrame.
-            ValueError: If the required columns ('last_review' or 'reviews_per_month') are missing from the dataset.
-            Exception: Propagates any unexpected exception encountered during missing value processing after logging the error.
+            ValueError: If required columns are missing.
+            Exception: Re-raises any unexpected exception after logging it.
         """
 
         try:
+                
+            df = df.copy()
 
-            if df is not None and not isinstance(df, pd.DataFrame):
-                raise TypeError("Input must be a pandas DataFrame")
-                
-            source = (df if df is not None else self.df).copy()
-                
-            if "last_review" in source.columns:
-                source["last_review"] = pd.to_datetime(source["last_review"])
-                source["last_review"] = source["last_review"].fillna(pd.Timestamp('1970-01-01'))
-            else:
-                raise ValueError("The 'last_review' property was not found in 'source'.")
+            self.logger.info("Starting missing value processing.")
             
-            if "reviews_per_month" in source.columns:
-                source["reviews_per_month"] = source["reviews_per_month"].fillna(0)
-            else:
-                raise ValueError("The 'reviews_per_month' property was not found in 'source'.")
+            self.validate_columns(df, ["last_review", "reviews_per_month"])
+
+            df["last_review"] = pd.to_datetime(df["last_review"], errors="coerce")
+            df["last_review"] = df["last_review"].fillna(pd.Timestamp('1970-01-01'))
+
+            df["reviews_per_month"] = df["reviews_per_month"].fillna(0)
+
+            self.logger.info("Missing value processing completed successfully.")
+
+            return df
 
         except Exception:
             self.logger.exception("An unexpected error occurred while filling in the missing values.")
             raise
 
-        return source
-
-    def skew_operations(self, df=None):
+    def skew_operations(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Applies transformations to reduce skewness in numerical features.
+        Reduces skewness in numerical features.
 
-        Operations:
-            - Uses the provided DataFrame if available; otherwise uses self.df.
-            - Applies a log1p transformation to 'number_of_reviews' and
-          'reviews_per_month'.
-            - Creates the derived features 'log_reviews' and 'log_rpm'.
+        Processing steps:
+            - Applies a log1p transformation to ``number_of_reviews``.
+            - Applies a log1p transformation to ``reviews_per_month``.
+            - Stores the transformed values in ``log_reviews`` and ``log_rpm``.
 
         Args:
-            df (pd.DataFrame, optional): Input DataFrame. If None, self.df is used.
+            df (pd.DataFrame): Dataset to process.
 
         Returns:
-            pd.DataFrame: Dataset with skewness-reduced features.
+            pd.DataFrame: Dataset containing the transformed features.
 
         Raises:
-            TypeError: If df is provided and is not a pandas DataFrame.
-            ValueError: If the required columns ('number_of_reviews' or 'reviews_per_month') are missing from the dataset.
-            Exception: Propagates any unexpected exception encountered during skewness transformation after logging the error.
+            ValueError: If required columns are missing.
+            Exception: Re-raises any unexpected exception after logging it.
         """
         
         try:
 
-            if df is not None and not isinstance(df, pd.DataFrame):
-                raise TypeError("Input must be a pandas DataFrame")
+            df = df.copy()
 
-            source = (df if df is not None else self.df).copy()
+            self.logger.info("Starting skewness transformation.")
 
-            required_cols = ["number_of_reviews", "reviews_per_month"]
-            if all(col in source.columns for col in required_cols):
-                source["log_reviews"] = np.log1p(source["number_of_reviews"])
-                source["log_rpm"] = np.log1p(source["reviews_per_month"])
-            else:
-                raise ValueError("The properties in 'required_cols' could not be found in 'source'.")
+            self.validate_columns(df, ["number_of_reviews", "reviews_per_month"])
+
+            df["log_reviews"] = np.log1p(df["number_of_reviews"])
+            df["log_rpm"] = np.log1p(df["reviews_per_month"])
+
+            self.logger.info("Skewness transformation completed successfully.")
+
+            return df
 
         except Exception:
-            self.logger.exception("An unexpected error occurred while applying the skewed value conversion.")
+            self.logger.exception("An unexpected error occurred while applying skewness transformation.")
             raise
-
-        return source
     
-    def run_pipeline(self):
+    def run_pipeline(self) -> pd.DataFrame:
         """
         Executes the complete preprocessing pipeline.
 
-        The following steps are performed sequentially:
-            1. Outlier processing
-            2. Missing value handling
-            3. Skewness transformation
+        The pipeline performs the following steps:
+
+            1. Outlier handling
+            2. Missing value imputation
+            3. Skewness reduction
 
         Returns:
             pd.DataFrame: Fully preprocessed dataset.
 
         Raises:
-            ValueError: If required columns are missing during any preprocessing step.
-            TypeError: If invalid input data is encountered.
-            Exception: Propagates any unexpected exception raised by the preprocessing steps.
+            Exception: Re-raises any exception encountered during preprocessing after logging the error.
         """
 
-        outlier_df = self.outlier_operations()
-        missing_df = self.missing_value_operations(df=outlier_df)
-        final_df = self.skew_operations(df=missing_df)
+        try:
+            self.logger.info("Starting preprocessing pipeline.")
 
-        return final_df
+            df = self.outlier_operations(self.df)
+            df = self.missing_value_operations(df)
+            df = self.skew_operations(df)
+
+            self.logger.info("Preprocessing pipeline completed successfully.")
+
+            return df
+
+        except Exception:
+            self.logger.exception("Preprocessing pipeline failed.")
+            raise
