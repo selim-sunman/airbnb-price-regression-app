@@ -70,6 +70,19 @@ class TestFeature:
         with pytest.raises(ValueError):
             feature.create_features(sample_df)
 
+    def test_encode_neighbourhood_frequency(self, sample_config, sample_df, mock_logger):
+        feature = Feature(sample_config, sample_df, mock_logger)
+        transform_feature = feature.encode_neighbourhood_frequency(sample_df)
+
+        assert "neighbourhood_freq" in transform_feature.columns
+
+    def test_encode_neighbourhood_frequency_error(self, sample_config, sample_df, mock_logger):
+        sample_df = sample_df.drop("neighbourhood", axis=1)
+        feature = Feature(sample_config, sample_df, mock_logger)
+
+        with pytest.raises(ValueError):
+            feature.encode_neighbourhood_frequency(sample_df)
+
     def test_remove_columns(self, sample_df, sample_config, mock_logger):
         drop_cols = sample_config["preprocessing"]["drop_cols"]
 
@@ -89,8 +102,10 @@ class TestFeature:
         assert "neigh_ad_rate" in result.columns
         assert "professional_host" in result.columns
         assert "estimated_booked_days" in result.columns
+        assert "neighbourhood_freq" in result.columns
 
         assert "name" not in result.columns
         assert "number_of_reviews" not in result.columns
         assert "availability_365" not in result.columns
+        assert "neighbourhood" not in result.columns
         

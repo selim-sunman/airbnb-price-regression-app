@@ -14,3 +14,33 @@ preprocessing:
     - "number_of_reviews"
     - "reviews_per_month"
     - "availability_365"
+    - "neighbourhood"
+
+  numeric_features:
+    - "latitude"
+    - "longitude"
+    - "minimum_nights"
+    - "calculated_host_listings_count"
+    - "log_reviews"
+    - "last_review_year"
+    - "neigh_ad_rate"
+    - "estimated_booked_days"
+    - "neighbourhood_freq"
+
+  categorical_features:
+    - "neighbourhood_group"
+    - "room_type"
+
+train_settings:
+  target_col: "price"
+  random_state: 42
+  test_size: 0.2
+
+hyperparameters:
+  params:
+    model__fit_intercept:
+      - True
+      - False
+    model__positive: 
+      - True
+      - False

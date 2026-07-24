@@ -131,6 +131,40 @@ class Feature:
             self.logger.exception("An unexpected error occurred while creating features.")
             raise
 
+    def encode_neighbourhood_frequency(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Applies frequency encoding to the neighbourhood feature.
+
+        Operations:
+            - The frequency of each neighbourhood is calculated based on its
+            occurrence in the input DataFrame and stored in a new column named ``neighbourhood_freq``.
+
+        Returns:
+            pd.DataFrame: A dataset with a `neighbourhood_freq` column added to it.
+
+        Raises:
+            ValueError: If one or more of the required columns are missing.
+            Exception: Propagates unexpected exceptions encountered during frequency encoding after the error is logged.
+        """
+        try:
+            df = df.copy()
+
+            self.logger.info("Applying frequency encoding to the 'neighbourhood' feature.")
+
+            self.validate_columns(df, ["neighbourhood"])
+
+            freq_map = df["neighbourhood"].value_counts(normalize=True)
+
+            df["neighbourhood_freq"] = df["neighbourhood"].map(freq_map)
+
+            self.logger.info("Successfully applied frequency encoding to the 'neighbourhood' feature.")
+
+            return df
+        
+        except Exception:
+            self.logger.exception("An unexpected error occurred during feature frequency encoding.")
+            raise
+            
     def remove_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Removes unnecessary columns from the dataset.
@@ -181,6 +215,7 @@ class Feature:
 
             df = self.extract_date_features()
             df = self.create_features(df)
+            df = self.encode_neighbourhood_frequency(df)
             df = self.remove_columns(df)
 
             self.logger.info(
